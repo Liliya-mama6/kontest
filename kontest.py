@@ -1,26 +1,76 @@
-from datetime import datetime
-import multiprocessing
+import logging
 
-def read_info(name):
-    all_data=[]
-    with open(name, 'r') as file:
-        k = file.readline()
-        while k != '':
-            all_data.append(k)
-            k = file.readline()
+
+class Runner:
+    def __init__(self, name, speed=5):
+        if isinstance(name, str):
+            self.name = name
+        else:
+            raise TypeError(f'Имя может быть только строкой, передано {type(name).__name__}')
+        self.distance = 0
+        if speed > 0:
+            self.speed = speed
+        else:
+            raise ValueError(f'Скорость не может быть отрицательной, сейчас {speed}')
+
+    def run(self):
+        self.distance += self.speed * 2
+
+    def walk(self):
+        self.distance += self.speed
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.name
+
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.name == other
+        elif isinstance(other, Runner):
+            return self.name == other.name
+
+
+class Tournament:
+    def __init__(self, distance, *participants):
+        self.full_distance = distance
+        self.participants = list(participants)
+
+    def start(self):
+        finishers = {}
+        place = 1
+        while self.participants:
+            for participant in self.participants:
+                participant.run()
+                if participant.distance >= self.full_distance:
+                    finishers[place] = participant
+                    place += 1
+                    self.participants.remove(participant)
+
+        return finishers
+
+
+first = Runner('Вося', 10)
+# second = Runner('Илья', 5)
+# # third = Runner('Арсен', 10)
+#
+# t = Tournament(101, first, second)
+# print(t.start())
 
 if __name__ == '__main__':
-    start = datetime.now()
-    read_info('file 1.txt')
-    read_info('file 2.txt')
-    read_info('file 3.txt')
-    read_info('file 4.txt')
-    end = datetime.now()
-    time=end - start
-    filenames = [f'./file {number}.txt' for number in range(1, 5)]
-    a = datetime.now()
-    with multiprocessing.Pool() as pool:
-        pool.map(read_info, filenames)
-    b = datetime.now()
-    print(time)
-    print(b-a)
+    logging.basicConfig(level=logging.INFO, filename='runner_tes.log',
+                        format='%(levelname)s | %(message)s', encoding='`UTF-8', filemode='w')
+
+try:
+    a = Runner('hhh', speed=3)
+    a.walk()
+    logging.info('"test_walk" выполнен успешно')
+except ValueError:
+    logging.warning("Неверная скорость для Runner", exc_info=True)
+try:
+    b = Runner(123)
+    b.run()
+    logging.info('"test_run" выполнен успешно')
+except TypeError:
+    logging.warning("Неверный тип данных для объекта Runner", exc_info=True)
