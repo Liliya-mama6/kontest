@@ -1,76 +1,72 @@
-import logging
+import asyncio
+from aiogram import Bot, Dispatcher, executor, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+api = ''
+bot = Bot(token=api)
+dp = Dispatcher(bot, storage=MemoryStorage())
+
+kb = InlineKeyboardMarkup(resize_keyboard=True)
+button = InlineKeyboardButton(text='Рассчитать', callback_data='calories')
+button1 = InlineKeyboardButton(text='Формулы рассчета', callback_data='formulas')
+kb.row(button, button1)
 
 
-class Runner:
-    def __init__(self, name, speed=5):
-        if isinstance(name, str):
-            self.name = name
-        else:
-            raise TypeError(f'Имя может быть только строкой, передано {type(name).__name__}')
-        self.distance = 0
-        if speed > 0:
-            self.speed = speed
-        else:
-            raise ValueError(f'Скорость не может быть отрицательной, сейчас {speed}')
-
-    def run(self):
-        self.distance += self.speed * 2
-
-    def walk(self):
-        self.distance += self.speed
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return self.name
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.name == other
-        elif isinstance(other, Runner):
-            return self.name == other.name
+@dp.message_handler(commands=['start'])
+async def start_message(message):
+    await message.answer('Привет! Я бот помогающий твоему здоровью.', reply_markup=kb)
 
 
-class Tournament:
-    def __init__(self, distance, *participants):
-        self.full_distance = distance
-        self.participants = list(participants)
-
-    def start(self):
-        finishers = {}
-        place = 1
-        while self.participants:
-            for participant in self.participants:
-                participant.run()
-                if participant.distance >= self.full_distance:
-                    finishers[place] = participant
-                    place += 1
-                    self.participants.remove(participant)
-
-        return finishers
+class UserState(StatesGroup):
+    age = State()
+    growth = State()
+    weight = State()
 
 
-first = Runner('Вося', 10)
-# second = Runner('Илья', 5)
-# # third = Runner('Арсен', 10)
-#
-# t = Tournament(101, first, second)
-# print(t.start())
+@dp.callback_query_handler(text='calories')
+async def set_age(call):
+    await call.message.answer('Введите свой возраст:')
+    await UserState.age.set()
+    await call.answer()
+
+
+@dp.callback_query_handler(text='formulas')
+async def formula(call):
+    await call.message.answer('10 х вес (кг) + 6,25 x рост (см) – 5 х возраст (г) + 5')
+    await call.answer()
+
+
+@dp.message_handler(state=UserState.age)
+async def set_growth(message, state):
+    await state.update_data(age=message.text)
+    await message.answer('Введите свой рост:')
+    await UserState.growth.set()
+
+
+@dp.message_handler(state=UserState.growth)
+async def set_weight(message, state):
+    await state.update_data(growth=message.text)
+    await message.answer('Введите свой вес:')
+    await UserState.weight.set()
+
+
+@dp.message_handler(state=UserState.weight)
+async def send_calories(message, state):
+    await UserState.weight.set()
+    await state.update_data(weight=message.text)
+    data = await state.get_data()
+    res = 10 * int(data['weight']) + 6.25 * int(data['growth']) - 5 * int(data['age']) + 5
+    await message.answer(str(res))
+    await state.finish()
+
+
+@dp.message_handler()
+async def unstart_messge(message):
+    await message.answer('введите команду /start для начала работы бота')
+
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO, filename='runner_tes.log',
-                        format='%(levelname)s | %(message)s', encoding='`UTF-8', filemode='w')
-
-try:
-    a = Runner('hhh', speed=3)
-    a.walk()
-    logging.info('"test_walk" выполнен успешно')
-except ValueError:
-    logging.warning("Неверная скорость для Runner", exc_info=True)
-try:
-    b = Runner(123)
-    b.run()
-    logging.info('"test_run" выполнен успешно')
-except TypeError:
-    logging.warning("Неверный тип данных для объекта Runner", exc_info=True)
+    executor.start_polling(dp, skip_updates=True)
